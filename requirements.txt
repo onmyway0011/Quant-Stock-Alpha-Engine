@@ -1,0 +1,55 @@
+# 核心依赖
+pandas>=1.5.0
+numpy>=1.24.0
+requests>=2.28.0
+schedule>=1.2.0
+loguru>=0.7.0
+python-dotenv>=1.0.0
+
+# 股票数据获取
+yfinance>=0.2.0
+akshare>=1.9.0
+tushare>=1.2.0
+
+# 技术分析
+TA-Lib>=0.4.0
+pandas-ta>=0.3.0
+
+# 数据库
+sqlalchemy>=2.0.0
+sqlite3
+
+# 企微通知
+requests>=2.28.0
+
+# 异步处理
+aiohttp>=3.8.0
+asyncio
+
+# 配置管理
+pyyaml>=6.0
+
+# 股票数据爬取和技术分析
+yfinance>=0.2.18
+ta-lib>=0.4.25
+stockstats>=0.5.0
+
+# AI分析（可选，需要时安装）
+# tradingagents-cn>=0.1.12
+# dashscope>=1.0.0
+# openai>=1.0.0
+# google-generativeai>=0.3.0
+
+# Web界面
+Flask>=2.3.0
+Werkzeug>=2.3.0
+Flask-SocketIO>=5.3.0
+
+# 测试
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# 数据可视化（可选）
+matplotlib>=3.6.0
+seaborn>=0.12.0
+plotly>=5.15.0

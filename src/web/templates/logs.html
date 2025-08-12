@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}系统日志 - 量化股票交易系统{% endblock %}
+
+{% block head %}
+<style>
+.log-container {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    max-height: 600px;
+    overflow-y: auto;
+}
+.log-line {
+    margin-bottom: 0.25rem;
+    word-wrap: break-word;
+}
+.log-level-INFO {
+    color: #4fc3f7;
+}
+.log-level-WARNING {
+    color: #ffb74d;
+}
+.log-level-ERROR {
+    color: #f44336;
+}
+.log-level-DEBUG {
+    color: #81c784;
+}
+.log-timestamp {
+    color: #9e9e9e;
+}
+.log-module {
+    color: #ba68c8;
+}
+.log-controls {
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-file-text"></i>
+                系统日志
+            </h2>
+            <div>
+                <button class="btn btn-outline-secondary" onclick="refreshLogs()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+                <button class="btn btn-outline-primary" onclick="downloadLogs()">
+                    <i class="bi bi-download"></i> 下载日志
+                </button>
+                <button class="btn btn-outline-danger" onclick="clearLogs()">
+                    <i class="bi bi-trash"></i> 清空显示
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志控制面板 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-body log-controls">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">日志级别过滤</label>
+                        <select class="form-select" id="logLevelFilter" onchange="filterLogs()">
+                            <option value="all">全部</option>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">模块过滤</label>
+                        <select class="form-select" id="moduleFilter" onchange="filterLogs()">
+                            <option value="all">全部模块</option>
+                            <option value="engine">交易引擎</option>
+                            <option value="monitor">股票监控</option>
+                            <option value="strategy">交易策略</option>
+                            <option value="data_provider">数据提供者</option>
+                            <option value="notification">消息通知</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">搜索关键词</label>
+                        <input type="text" class="form-control" id="searchKeyword" 
+                               placeholder="输入搜索关键词" onkeyup="filterLogs()">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">自动刷新</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoRefresh" 
+                                   onchange="toggleAutoRefresh()">
+                            <label class="form-check-label" for="autoRefresh">
+                                每5秒刷新
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志统计 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">INFO</h5>
+                <h3 id="infoCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">WARNING</h5>
+                <h3 id="warningCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-danger">ERROR</h5>
+                <h3 id="errorCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">DEBUG</h5>
+                <h3 id="debugCount">0</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志显示区域 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="bi bi-terminal"></i>
+                    实时日志 
+                    <span class="badge bg-secondary" id="logCount">0</span>
+                </h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="scrollToTop()">
+                        <i class="bi bi-arrow-up"></i> 顶部
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="scrollToBottom()">
+                        <i class="bi bi-arrow-down"></i> 底部
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="log-container" id="logContainer">
+                    <div class="text-center text-muted">
+                        <i class="bi bi-hourglass-split"></i>
+                        正在加载日志...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志详情模态框 -->
+<div class="modal fade" id="logDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">日志详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="logDetailContent"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allLogs = [];
+let filteredLogs = [];
+let autoRefreshInterval = null;
+
+// 页面加载时获取日志
+document.addEventListener('DOMContentLoaded', function() {
+    refreshLogs();
+});
+
+// 刷新日志
+function refreshLogs() {
+    axios.get('/api/logs')
+        .then(response => {
+            allLogs = response.data.logs || [];
+            filterLogs();
+            updateLogStats();
+        })
+        .catch(error => {
+            console.error('获取日志失败:', error);
+            document.getElementById('logContainer').innerHTML = 
+                '<div class="text-center text-danger"><i class="bi bi-exclamation-triangle"></i> 获取日志失败</div>';
+        });
+}
+
+// 过滤日志
+function filterLogs() {
+    const levelFilter = document.getElementById('logLevelFilter').value;
+    const moduleFilter = document.getElementById('moduleFilter').value;
+    const searchKeyword = document.getElementById('searchKeyword').value.toLowerCase();
+    
+    filteredLogs = allLogs.filter(log => {
+        // 级别过滤
+        if (levelFilter !== 'all' && !log.includes(levelFilter)) {
+            return false;
+        }
+        
+        // 模块过滤
+        if (moduleFilter !== 'all' && !log.includes(moduleFilter)) {
+            return false;
+        }
+        
+        // 关键词搜索
+        if (searchKeyword && !log.toLowerCase().includes(searchKeyword)) {
+            return false;
+        }
+        
+        return true;
+    });
+    
+    displayLogs();
+}
+
+// 显示日志
+function displayLogs() {
+    const container = document.getElementById('logContainer');
+    
+    if (filteredLogs.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted"><i class="bi bi-info-circle"></i> 没有符合条件的日志</div>';
+        return;
+    }
+    
+    const logHtml = filteredLogs.map((log, index) => {
+        return formatLogLine(log, index);
+    }).join('');
+    
+    container.innerHTML = logHtml;
+    document.getElementById('logCount').textContent = filteredLogs.length;
+    
+    // 自动滚动到底部
+    container.scrollTop = container.scrollHeight;
+}
+
+// 格式化日志行
+function formatLogLine(log, index) {
+    // 解析日志格式: 时间 | 级别 | 模块:函数:行号 | 消息
+    const logPattern = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \| (\w+) \| ([^|]+) \| (.+)$/;
+    const match = log.match(logPattern);
+    
+    if (match) {
+        const [, timestamp, level, module, message] = match;
+        return `
+            <div class="log-line" onclick="showLogDetail(${index})" style="cursor: pointer;">
+                <span class="log-timestamp">${timestamp}</span> |
+                <span class="log-level-${level}">${level}</span> |
+                <span class="log-module">${module}</span> |
+                <span>${message}</span>
+            </div>
+        `;
+    } else {
+        // 如果不匹配标准格式，直接显示
+        return `<div class="log-line" onclick="showLogDetail(${index})" style="cursor: pointer;">${log}</div>`;
+    }
+}
+
+// 显示日志详情
+function showLogDetail(index) {
+    const log = filteredLogs[index];
+    document.getElementById('logDetailContent').textContent = log;
+    new bootstrap.Modal(document.getElementById('logDetailModal')).show();
+}
+
+// 更新日志统计
+function updateLogStats() {
+    const stats = {
+        INFO: 0,
+        WARNING: 0,
+        ERROR: 0,
+        DEBUG: 0
+    };
+    
+    allLogs.forEach(log => {
+        Object.keys(stats).forEach(level => {
+            if (log.includes(`| ${level} |`)) {
+                stats[level]++;
+            }
+        });
+    });
+    
+    document.getElementById('infoCount').textContent = stats.INFO;
+    document.getElementById('warningCount').textContent = stats.WARNING;
+    document.getElementById('errorCount').textContent = stats.ERROR;
+    document.getElementById('debugCount').textContent = stats.DEBUG;
+}
+
+// 切换自动刷新
+function toggleAutoRefresh() {
+    const autoRefresh = document.getElementById('autoRefresh').checked;
+    
+    if (autoRefresh) {
+        autoRefreshInterval = setInterval(refreshLogs, 5000);
+    } else {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+}
+
+// 滚动到顶部
+function scrollToTop() {
+    document.getElementById('logContainer').scrollTop = 0;
+}
+
+// 滚动到底部
+function scrollToBottom() {
+    const container = document.getElementById('logContainer');
+    container.scrollTop = container.scrollHeight;
+}
+
+// 清空显示
+function clearLogs() {
+    if (confirm('确定要清空当前显示的日志吗？这不会删除日志文件。')) {
+        document.getElementById('logContainer').innerHTML = 
+            '<div class="text-center text-muted"><i class="bi bi-info-circle"></i> 日志显示已清空</div>';
+        document.getElementById('logCount').textContent = '0';
+    }
+}
+
+// 下载日志
+function downloadLogs() {
+    const logContent = filteredLogs.join('\n');
+    const blob = new Blob([logContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trading_logs_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    window.URL.revokeObjectURL(url);
+}
+
+// 页面卸载时清理定时器
+window.addEventListener('beforeunload', function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}配置管理 - 量化股票交易系统{% endblock %}
+
+{% block head %}
+<style>
+.config-section {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+.config-section-header {
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+}
+.config-section-body {
+    padding: 1rem;
+}
+.test-result {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+.test-success {
+    background-color: #d1edff;
+    color: #0c5460;
+    border: 1px solid #b6effb;
+}
+.test-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-gear"></i>
+                配置管理
+            </h2>
+            <div>
+                <button class="btn btn-outline-secondary" onclick="loadConfig()">
+                    <i class="bi bi-arrow-clockwise"></i> 重新加载
+                </button>
+                <button class="btn btn-outline-primary" onclick="validateConfig()">
+                    <i class="bi bi-check-circle"></i> 验证配置
+                </button>
+                <button class="btn btn-success" onclick="saveConfig()">
+                    <i class="bi bi-save"></i> 保存配置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 配置表单 -->
+<form id="configForm">
+    <div class="row">
+        <!-- 左侧：系统配置 -->
+        <div class="col-md-6">
+            <!-- 系统设置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-cpu"></i> 系统设置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <label class="form-label">系统名称</label>
+                        <input type="text" class="form-control" name="system.name" 
+                               value="{{ config_data.system.name if config_data.system else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">系统版本</label>
+                        <input type="text" class="form-control" name="system.version" 
+                               value="{{ config_data.system.version if config_data.system else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">时区设置</label>
+                        <select class="form-select" name="system.timezone">
+                            <option value="Asia/Shanghai" {{ 'selected' if config_data.system and config_data.system.timezone == 'Asia/Shanghai' else '' }}>Asia/Shanghai</option>
+                            <option value="UTC" {{ 'selected' if config_data.system and config_data.system.timezone == 'UTC' else '' }}>UTC</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据源配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-database"></i> 数据源配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <label class="form-label">主要数据源</label>
+                        <select class="form-select" name="data_sources.primary">
+                            <option value="tushare" {{ 'selected' if config_data.data_sources and config_data.data_sources.primary == 'tushare' else '' }}>Tushare</option>
+                            <option value="akshare" {{ 'selected' if config_data.data_sources and config_data.data_sources.primary == 'akshare' else '' }}>Akshare</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备用数据源</label>
+                        <select class="form-select" name="data_sources.backup">
+                            <option value="akshare" {{ 'selected' if config_data.data_sources and config_data.data_sources.backup == 'akshare' else '' }}>Akshare</option>
+                            <option value="tushare" {{ 'selected' if config_data.data_sources and config_data.data_sources.backup == 'tushare' else '' }}>Tushare</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">实时数据源</label>
+                        <select class="form-select" name="data_sources.realtime">
+                            <option value="sina" {{ 'selected' if config_data.data_sources and config_data.data_sources.realtime == 'sina' else '' }}>新浪财经</option>
+                            <option value="tushare" {{ 'selected' if config_data.data_sources and config_data.data_sources.realtime == 'tushare' else '' }}>Tushare</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 监控配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-eye"></i> 监控配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <label class="form-label">监控股票列表</label>
+                        <textarea class="form-control" name="monitoring.stocks" rows="3" 
+                                  placeholder="每行一个股票代码，如：000001.SZ">{{ config_data.monitoring.stocks | join('\n') if config_data.monitoring and config_data.monitoring.stocks else '' }}</textarea>
+                        <div class="form-text">每行输入一个股票代码</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">波动率阈值 (%)</label>
+                        <input type="number" class="form-control" name="monitoring.volatility_threshold" 
+                               step="0.01" min="0.01" max="0.1"
+                               value="{{ config_data.monitoring.volatility_threshold * 100 if config_data.monitoring else 3 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">检查间隔 (秒)</label>
+                        <input type="number" class="form-control" name="monitoring.check_interval" 
+                               min="10" max="300"
+                               value="{{ config_data.monitoring.check_interval if config_data.monitoring else 60 }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：策略和风险配置 -->
+        <div class="col-md-6">
+            <!-- 策略配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-lightning"></i> 策略配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <label class="form-label">策略名称</label>
+                        <input type="text" class="form-control" name="strategy.name" 
+                               value="{{ config_data.strategy.name if config_data.strategy else 'pressure_support_strategy' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">分析周期 (月)</label>
+                        <input type="number" class="form-control" name="strategy.parameters.analysis_period" 
+                               min="1" max="12"
+                               value="{{ config_data.strategy.parameters.analysis_period if config_data.strategy and config_data.strategy.parameters else 6 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">压力位因子</label>
+                        <input type="number" class="form-control" name="strategy.parameters.pressure_factor" 
+                               step="0.01" min="1.0" max="1.2"
+                               value="{{ config_data.strategy.parameters.pressure_factor if config_data.strategy and config_data.strategy.parameters else 1.05 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">支撑位因子</label>
+                        <input type="number" class="form-control" name="strategy.parameters.support_factor" 
+                               step="0.01" min="0.8" max="1.0"
+                               value="{{ config_data.strategy.parameters.support_factor if config_data.strategy and config_data.strategy.parameters else 0.95 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">成交量阈值</label>
+                        <input type="number" class="form-control" name="strategy.parameters.volume_threshold" 
+                               step="0.1" min="1.0" max="5.0"
+                               value="{{ config_data.strategy.parameters.volume_threshold if config_data.strategy and config_data.strategy.parameters else 1.5 }}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 风险管理配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-shield-check"></i> 风险管理
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <label class="form-label">最大持仓金额 (元)</label>
+                        <input type="number" class="form-control" name="risk_management.max_position_size" 
+                               min="1000" max="100000"
+                               value="{{ config_data.risk_management.get('max_position_size', 10000) if config_data.get('risk_management') else 10000 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">最大持仓数量</label>
+                        <input type="number" class="form-control" name="risk_management.max_positions" 
+                               min="1" max="20"
+                               value="{{ config_data.risk_management.get('max_positions', 5) if config_data.get('risk_management') else 5 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">止损比例 (%)</label>
+                        <input type="number" class="form-control" name="risk_management.stop_loss" 
+                               step="0.01" min="0.01" max="0.2"
+                               value="{{ (config_data.risk_management.get('stop_loss', 0.05) * 100) if config_data.get('risk_management') else 5 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">止盈比例 (%)</label>
+                        <input type="number" class="form-control" name="risk_management.take_profit" 
+                               step="0.01" min="0.05" max="0.5"
+                               value="{{ (config_data.risk_management.get('take_profit', 0.1) * 100) if config_data.get('risk_management') else 10 }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">风险容忍度 (%)</label>
+                        <input type="number" class="form-control" name="risk_management.risk_tolerance" 
+                               step="0.01" min="0.01" max="0.1"
+                               value="{{ (config_data.risk_management.get('risk_tolerance', 0.02) * 100) if config_data.get('risk_management') else 2 }}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 通知配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-chat-dots"></i> 通知配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="notification.wecom.enabled" 
+                                   {{ 'checked' if config_data.notification and config_data.notification.wecom and config_data.notification.wecom.enabled else '' }}>
+                            <label class="form-check-label">启用企业微信通知</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="notification.wecom.mention_all" 
+                                   {{ 'checked' if config_data.notification and config_data.notification.wecom and config_data.notification.wecom.mention_all else '' }}>
+                            <label class="form-check-label">@所有人</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 环境变量配置 -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-key"></i> 环境变量配置
+                    <small class="text-muted ms-2">敏感信息，请妥善保管</small>
+                </div>
+                <div class="config-section-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Tushare Token</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" name="env.TUSHARE_TOKEN" 
+                                           value="{{ env_data.TUSHARE_TOKEN if env_data else '' }}">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="testConnection('tushare', this)">
+                                        <i class="bi bi-wifi"></i> 测试
+                                    </button>
+                                </div>
+                                <div class="test-result" id="tushare-test-result" style="display: none;"></div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">企业微信 Webhook URL</label>
+                                <div class="input-group">
+                                    <input type="url" class="form-control" name="env.WECOM_WEBHOOK_URL" 
+                                           value="{{ env_data.WECOM_WEBHOOK_URL if env_data else '' }}">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="testConnection('wecom', this)">
+                                        <i class="bi bi-wifi"></i> 测试
+                                    </button>
+                                </div>
+                                <div class="test-result" id="wecom-test-result" style="display: none;"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">数据库连接URL</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="env.DATABASE_URL" 
+                                           value="{{ env_data.DATABASE_URL if env_data else 'sqlite:///stock_trading.db' }}">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="testConnection('database', this)">
+                                        <i class="bi bi-wifi"></i> 测试
+                                    </button>
+                                </div>
+                                <div class="test-result" id="database-test-result" style="display: none;"></div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">日志级别</label>
+                                <select class="form-select" name="env.LOG_LEVEL">
+                                    <option value="DEBUG" {{ 'selected' if env_data and env_data.LOG_LEVEL == 'DEBUG' else '' }}>DEBUG</option>
+                                    <option value="INFO" {{ 'selected' if env_data and env_data.LOG_LEVEL == 'INFO' else '' }}>INFO</option>
+                                    <option value="WARNING" {{ 'selected' if env_data and env_data.LOG_LEVEL == 'WARNING' else '' }}>WARNING</option>
+                                    <option value="ERROR" {{ 'selected' if env_data and env_data.LOG_LEVEL == 'ERROR' else '' }}>ERROR</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- 操作结果提示 -->
+<div id="alertContainer"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 加载配置
+function loadConfig() {
+    axios.get('/api/config')
+        .then(response => {
+            location.reload();
+        })
+        .catch(error => {
+            showAlert('加载配置失败: ' + error.message, 'danger');
+        });
+}
+
+// 验证配置
+function validateConfig() {
+    const formData = getFormData();
+    
+    axios.post('/api/validate', {
+        config: formData.config
+    })
+    .then(response => {
+        if (response.data.valid) {
+            showAlert('配置验证通过！', 'success');
+        } else {
+            showAlert('配置验证失败：<br>' + response.data.errors.join('<br>'), 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('验证配置失败: ' + error.message, 'danger');
+    });
+}
+
+// 保存配置
+function saveConfig() {
+    const formData = getFormData();
+    
+    axios.post('/api/config', formData)
+        .then(response => {
+            if (response.data.success) {
+                showAlert('配置保存成功！', 'success');
+            } else {
+                showAlert('配置保存失败: ' + response.data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('保存配置失败: ' + error.message, 'danger');
+        });
+}
+
+// 测试连接
+function testConnection(type, button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> 测试中...';
+    button.disabled = true;
+    
+    const formData = getFormData();
+    
+    axios.post('/api/test-connection', {
+        type: type,
+        config: formData.env
+    })
+    .then(response => {
+        const resultDiv = document.getElementById(type + '-test-result');
+        resultDiv.style.display = 'block';
+        
+        if (response.data.success) {
+            resultDiv.className = 'test-result test-success';
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ' + response.data.message;
+        } else {
+            resultDiv.className = 'test-result test-error';
+            resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> ' + response.data.message;
+        }
+    })
+    .catch(error => {
+        const resultDiv = document.getElementById(type + '-test-result');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'test-result test-error';
+        resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> 连接测试失败: ' + error.message;
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// 获取表单数据
+function getFormData() {
+    const form = document.getElementById('configForm');
+    const formData = new FormData(form);
+    const config = {};
+    const env = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key.startsWith('env.')) {
+            env[key.substring(4)] = value;
+        } else {
+            setNestedValue(config, key, value);
+        }
+    }
+    
+    // 处理复选框
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        if (checkbox.name.startsWith('env.')) {
+            env[checkbox.name.substring(4)] = checkbox.checked;
+        } else {
+            setNestedValue(config, checkbox.name, checkbox.checked);
+        }
+    });
+    
+    // 处理股票列表
+    if (config.monitoring && config.monitoring.stocks) {
+        config.monitoring.stocks = config.monitoring.stocks.split('\n').filter(s => s.trim());
+    }
+    
+    // 转换百分比为小数
+    if (config.monitoring && config.monitoring.volatility_threshold) {
+        config.monitoring.volatility_threshold = parseFloat(config.monitoring.volatility_threshold) / 100;
+    }
+    if (config.risk_management) {
+        if (config.risk_management.stop_loss) {
+            config.risk_management.stop_loss = parseFloat(config.risk_management.stop_loss) / 100;
+        }
+        if (config.risk_management.take_profit) {
+            config.risk_management.take_profit = parseFloat(config.risk_management.take_profit) / 100;
+        }
+        if (config.risk_management.risk_tolerance) {
+            config.risk_management.risk_tolerance = parseFloat(config.risk_management.risk_tolerance) / 100;
+        }
+    }
+    
+    return { config, env };
+}
+
+// 设置嵌套对象值
+function setNestedValue(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+        if (!(keys[i] in current)) {
+            current[keys[i]] = {};
+        }
+        current = current[keys[i]];
+    }
+    
+    current[keys[keys.length - 1]] = value;
+}
+
+// 显示提示信息
+function showAlert(message, type) {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    alertContainer.appendChild(alertDiv);
+    
+    // 自动移除提示
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
