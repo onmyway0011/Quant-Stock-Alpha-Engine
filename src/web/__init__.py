@@ -10,9 +10,8 @@ __version__ = "1.0.0"
 __author__ = "Quant Team"
 
 # 导出主要类
-from .config_server import ConfigServer, ConfigManager
+from .config_server import ConfigServer
 
 __all__ = [
-    'ConfigServer',
-    'ConfigManager'
+    'ConfigServer'
 ]

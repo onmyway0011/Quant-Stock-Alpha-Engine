@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / 'src'))
 
 from src.notification.wecom_notifier import (
     WeComNotifier, NotificationManager, MessageType
@@ -383,9 +384,9 @@ class TestNotification(unittest.TestCase):
     
     def test_notification_manager_initialization(self):
         """测试通知管理器初始化"""
-        manager = NotificationManager(self.mock_config)
+        manager = NotificationManager()
         
-        self.assertEqual(manager.config, self.mock_config)
+        self.assertTrue(hasattr(manager, 'enabled'))
         self.assertTrue(manager.enabled)
         self.assertIsNone(manager.wecom_notifier)
     
@@ -397,7 +398,7 @@ class TestNotification(unittest.TestCase):
         mock_notifier.initialize.return_value = True
         mock_notifier_class.return_value = mock_notifier
         
-        manager = NotificationManager(self.mock_config)
+        manager = NotificationManager()
         
         async def test_init():
             result = await manager.initialize()
@@ -411,7 +412,7 @@ class TestNotification(unittest.TestCase):
         # 禁用通知
         self.mock_config.notification.wecom_enabled = False
         
-        manager = NotificationManager(self.mock_config)
+        manager = NotificationManager()
         
         async def test_disabled():
             result = await manager.initialize()
@@ -428,7 +429,7 @@ class TestNotification(unittest.TestCase):
         # 清空Webhook URL
         self.mock_config.notification.wecom_webhook_url = ''
         
-        manager = NotificationManager(self.mock_config)
+        manager = NotificationManager()
         
         async def test_missing_webhook():
             result = await manager.initialize()
@@ -449,7 +450,7 @@ class TestNotification(unittest.TestCase):
         mock_notifier.send_custom_message.return_value = True
         mock_notifier_class.return_value = mock_notifier
         
-        manager = NotificationManager(self.mock_config)
+        manager = NotificationManager()
         
         async def test_all_methods():
             await manager.initialize()

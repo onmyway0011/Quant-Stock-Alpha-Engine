@@ -23,7 +23,7 @@ def setup_logger(config, log_file: Optional[str] = None):
     logger.remove()
     
     # 获取日志配置
-    log_config = config.logging
+    log_config = getattr(config, 'logging', {}) or {}
     level = log_config.get('level', 'INFO')
     log_format = log_config.get('format', 
         "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}")
@@ -40,11 +40,21 @@ def setup_logger(config, log_file: Optional[str] = None):
         diagnose=True
     )
     
+    # 计算日志目录与文件名
+    # 优先 1) 参数 log_file，2) logging.dir/log_dir/logs_dir，3) 默认项目根 logs 目录 + 默认文件名
+    project_root = Path(__file__).resolve().parents[2]
+    default_log_dir = project_root / 'logs'
+    cfg_log_dir = log_config.get('dir') or log_config.get('log_dir') or log_config.get('logs_dir')
+    cfg_log_file_name = log_config.get('file', 'trading.log')
+
     # 文件输出
     if log_file:
         log_path = Path(log_file)
     else:
-        log_path = config.logs_dir / "trading.log"
+        log_dir = Path(cfg_log_dir) if cfg_log_dir else default_log_dir
+        if not log_dir.is_absolute():
+            log_dir = (project_root / log_dir).resolve()
+        log_path = log_dir / cfg_log_file_name
     
     # 确保日志目录存在
     log_path.parent.mkdir(parents=True, exist_ok=True)

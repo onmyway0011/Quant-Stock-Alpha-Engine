@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票监控 - 量化股票交易系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .stock-card {
+            transition: transform 0.2s;
+        }
+        .stock-card:hover {
+            transform: translateY(-2px);
+        }
+        .alert-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+        }
+        .monitoring-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .threshold-input {
+            width: 80px;
+        }
+        .n8n-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up"></i>
+                量化股票交易系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="bi bi-house"></i> 首页
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">
+                            <i class="bi bi-gear"></i> 配置管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/monitoring">
+                            <i class="bi bi-eye"></i> 股票监控
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 监控状态指示器 -->
+    <div class="monitoring-status">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-2">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm text-success me-2" role="status" id="statusSpinner" style="display: none;">
+                        <span class="visually-hidden">监控中...</span>
+                    </div>
+                    <i class="bi bi-circle-fill text-danger me-2" id="statusIcon"></i>
+                    <small id="statusText">监控已停止</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要内容 -->
+    <main class="container mt-4">
+        <!-- 监控控制面板 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-sliders"></i>
+                            监控控制面板
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <button class="btn btn-success" id="startMonitoring">
+                                    <i class="bi bi-play-circle"></i> 开始监控
+                                </button>
+                                <button class="btn btn-danger" id="stopMonitoring" style="display: none;">
+                                    <i class="bi bi-stop-circle"></i> 停止监控
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">轮询间隔（秒）</label>
+                                <input type="number" class="form-control" id="pollingInterval" value="30" min="10" max="300">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">通知冷却（秒）</label>
+                                <input type="number" class="form-control" id="notificationCooldown" value="300" min="60" max="3600">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="autoNotification" checked>
+                                    <label class="form-check-label" for="autoNotification">
+                                        自动通知
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 股票监控列表 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-list-check"></i>
+                            监控股票列表
+                        </h5>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addStockModal">
+                            <i class="bi bi-plus-circle"></i> 添加股票
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="stockList">
+                            <!-- 股票卡片将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- N8n工作流集成 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card n8n-section">
+                    <div class="card-header border-0">
+                        <h5 class="mb-0 text-white">
+                            <i class="bi bi-diagram-3"></i>
+                            N8n工作流集成
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="n8nEnabled">
+                                    <label class="form-check-label text-white" for="n8nEnabled">
+                                        启用N8n工作流集成
+                                    </label>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white">N8n服务器地址</label>
+                                    <input type="url" class="form-control" id="n8nBaseUrl" placeholder="http://localhost:5678">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white">Webhook URL</label>
+                                    <input type="url" class="form-control" id="n8nWebhookUrl" placeholder="https://your-n8n.com/webhook/...">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label text-white">API密钥</label>
+                                    <input type="password" class="form-control" id="n8nApiKey" placeholder="可选">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white">默认工作流ID</label>
+                                    <input type="text" class="form-control" id="n8nWorkflowId" placeholder="可选">
+                                </div>
+                                <button class="btn btn-light" id="testN8nConnection">
+                                    <i class="bi bi-wifi"></i> 测试连接
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 预警历史 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock-history"></i>
+                            预警历史
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>股票</th>
+                                        <th>预警类型</th>
+                                        <th>级别</th>
+                                        <th>当前值</th>
+                                        <th>阈值</th>
+                                        <th>消息</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alertHistory">
+                                    <!-- 预警历史将通过JavaScript动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 添加股票模态框 -->
+    <div class="modal fade" id="addStockModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">添加监控股票</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addStockForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">股票代码 *</label>
+                                    <input type="text" class="form-control" id="stockSymbol" placeholder="例如: 000001.SZ" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">股票名称</label>
+                                    <input type="text" class="form-control" id="stockName" placeholder="例如: 平安银行">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">RSI超买阈值</label>
+                                    <input type="number" class="form-control threshold-input" id="rsiOverbought" value="70" min="50" max="100">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">RSI超卖阈值</label>
+                                    <input type="number" class="form-control threshold-input" id="rsiOversold" value="30" min="0" max="50">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">价格变动阈值（%）</label>
+                                    <input type="number" class="form-control threshold-input" id="priceChangeThreshold" value="5" min="1" max="20" step="0.1">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">成交量阈值（倍数）</label>
+                                    <input type="number" class="form-control threshold-input" id="volumeThreshold" value="2" min="1" max="10" step="0.1">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">MACD阈值</label>
+                                    <input type="number" class="form-control threshold-input" id="macdThreshold" value="0.1" min="0.01" max="1" step="0.01">
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="stockEnabled" checked>
+                                        <label class="form-check-label" for="stockEnabled">
+                                            启用监控
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveStock">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        // 监控状态管理
+        let monitoringStatus = {
+            isRunning: false,
+            stocks: [],
+            alerts: []
+        };
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMonitoringConfig();
+            loadStockList();
+            loadAlertHistory();
+            setupEventListeners();
+            
+            // 定期更新状态
+            setInterval(updateMonitoringStatus, 5000);
+        });
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            document.getElementById('startMonitoring').addEventListener('click', startMonitoring);
+            document.getElementById('stopMonitoring').addEventListener('click', stopMonitoring);
+            document.getElementById('saveStock').addEventListener('click', saveStock);
+            document.getElementById('testN8nConnection').addEventListener('click', testN8nConnection);
+        }
+
+        // 加载监控配置
+        async function loadMonitoringConfig() {
+            try {
+                const response = await axios.get('/api/monitoring/config');
+                const config = response.data;
+                
+                document.getElementById('pollingInterval').value = config.polling_interval || 30;
+                document.getElementById('notificationCooldown').value = config.notification_cooldown || 300;
+                document.getElementById('autoNotification').checked = config.enable_auto_notification || false;
+                
+                // N8n配置
+                document.getElementById('n8nEnabled').checked = config.n8n?.enabled || false;
+                document.getElementById('n8nBaseUrl').value = config.n8n?.base_url || '';
+                document.getElementById('n8nWebhookUrl').value = config.n8n?.webhook_url || '';
+                document.getElementById('n8nApiKey').value = config.n8n?.api_key || '';
+                document.getElementById('n8nWorkflowId').value = config.n8n?.workflow_id || '';
+                
+            } catch (error) {
+                console.error('加载监控配置失败:', error);
+            }
+        }
+
+        // 加载股票列表
+        async function loadStockList() {
+            try {
+                const response = await axios.get('/api/monitoring/stocks');
+                monitoringStatus.stocks = response.data;
+                renderStockList();
+            } catch (error) {
+                console.error('加载股票列表失败:', error);
+            }
+        }
+
+        // 渲染股票列表
+        function renderStockList() {
+            const container = document.getElementById('stockList');
+            container.innerHTML = '';
+            
+            monitoringStatus.stocks.forEach(stock => {
+                const stockCard = createStockCard(stock);
+                container.appendChild(stockCard);
+            });
+        }
+
+        // 创建股票卡片
+        function createStockCard(stock) {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 mb-3';
+            
+            const alertCount = monitoringStatus.alerts.filter(alert => alert.symbol === stock.symbol).length;
+            
+            col.innerHTML = `
+                <div class="card stock-card h-100 ${stock.enabled ? '' : 'opacity-50'}">
+                    <div class="card-body position-relative">
+                        ${alertCount > 0 ? `<span class="badge bg-danger alert-badge">${alertCount}</span>` : ''}
+                        <h6 class="card-title">
+                            <i class="bi bi-graph-up text-primary"></i>
+                            ${stock.name || stock.symbol}
+                        </h6>
+                        <p class="card-text small text-muted">${stock.symbol}</p>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <small class="text-muted">RSI</small><br>
+                                <span class="badge bg-info">${stock.rsi_overbought}/${stock.rsi_oversold}</span>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">价格变动</small><br>
+                                <span class="badge bg-warning">${stock.price_change_threshold}%</span>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editStock('${stock.symbol}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteStock('${stock.symbol}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            <div class="form-check form-switch float-end">
+                                <input class="form-check-input" type="checkbox" ${stock.enabled ? 'checked' : ''} 
+                                       onchange="toggleStock('${stock.symbol}', this.checked)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+
+        // 开始监控
+        async function startMonitoring() {
+            try {
+                await axios.post('/api/monitoring/start');
+                updateMonitoringUI(true);
+                showToast('监控已启动', 'success');
+            } catch (error) {
+                console.error('启动监控失败:', error);
+                showToast('启动监控失败', 'error');
+            }
+        }
+
+        // 停止监控
+        async function stopMonitoring() {
+            try {
+                await axios.post('/api/monitoring/stop');
+                updateMonitoringUI(false);
+                showToast('监控已停止', 'info');
+            } catch (error) {
+                console.error('停止监控失败:', error);
+                showToast('停止监控失败', 'error');
+            }
+        }
+
+        // 更新监控UI状态
+        function updateMonitoringUI(isRunning) {
+            monitoringStatus.isRunning = isRunning;
+            
+            const startBtn = document.getElementById('startMonitoring');
+            const stopBtn = document.getElementById('stopMonitoring');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const statusSpinner = document.getElementById('statusSpinner');
+            
+            if (isRunning) {
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+                statusIcon.className = 'bi bi-circle-fill text-success me-2';
+                statusText.textContent = '监控运行中';
+                statusSpinner.style.display = 'inline-block';
+            } else {
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                statusIcon.className = 'bi bi-circle-fill text-danger me-2';
+                statusText.textContent = '监控已停止';
+                statusSpinner.style.display = 'none';
+            }
+        }
+
+        // 保存股票
+        async function saveStock() {
+            const stockData = {
+                symbol: document.getElementById('stockSymbol').value,
+                name: document.getElementById('stockName').value,
+                rsi_overbought: parseFloat(document.getElementById('rsiOverbought').value),
+                rsi_oversold: parseFloat(document.getElementById('rsiOversold').value),
+                price_change_threshold: parseFloat(document.getElementById('priceChangeThreshold').value) / 100,
+                volume_threshold: parseFloat(document.getElementById('volumeThreshold').value),
+                macd_threshold: parseFloat(document.getElementById('macdThreshold').value),
+                enabled: document.getElementById('stockEnabled').checked
+            };
+            
+            try {
+                await axios.post('/api/monitoring/stocks', stockData);
+                bootstrap.Modal.getInstance(document.getElementById('addStockModal')).hide();
+                loadStockList();
+                showToast('股票添加成功', 'success');
+            } catch (error) {
+                console.error('保存股票失败:', error);
+                showToast('保存股票失败', 'error');
+            }
+        }
+
+        // 测试N8n连接
+        async function testN8nConnection() {
+            const webhookUrl = document.getElementById('n8nWebhookUrl').value;
+            if (!webhookUrl) {
+                showToast('请先输入Webhook URL', 'warning');
+                return;
+            }
+            
+            try {
+                await axios.post('/api/monitoring/test-n8n', { webhook_url: webhookUrl });
+                showToast('N8n连接测试成功', 'success');
+            } catch (error) {
+                console.error('N8n连接测试失败:', error);
+                showToast('N8n连接测试失败', 'error');
+            }
+        }
+
+        // 更新监控状态
+        async function updateMonitoringStatus() {
+            try {
+                const response = await axios.get('/api/monitoring/status');
+                const status = response.data;
+                updateMonitoringUI(status.is_running);
+            } catch (error) {
+                console.error('获取监控状态失败:', error);
+            }
+        }
+
+        // 加载预警历史
+        async function loadAlertHistory() {
+            try {
+                const response = await axios.get('/api/monitoring/alerts');
+                monitoringStatus.alerts = response.data;
+                renderAlertHistory();
+            } catch (error) {
+                console.error('加载预警历史失败:', error);
+            }
+        }
+
+        // 渲染预警历史
+        function renderAlertHistory() {
+            const tbody = document.getElementById('alertHistory');
+            tbody.innerHTML = '';
+            
+            monitoringStatus.alerts.slice(0, 20).forEach(alert => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(alert.timestamp).toLocaleString()}</td>
+                    <td>${alert.symbol}</td>
+                    <td>${alert.alert_type}</td>
+                    <td><span class="badge bg-${getLevelColor(alert.level)}">${alert.level}</span></td>
+                    <td>${alert.current_value.toFixed(4)}</td>
+                    <td>${alert.threshold.toFixed(4)}</td>
+                    <td>${alert.message}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 获取级别颜色
+        function getLevelColor(level) {
+            const colors = {
+                'INFO': 'info',
+                'WARNING': 'warning',
+                'CRITICAL': 'danger'
+            };
+            return colors[level] || 'secondary';
+        }
+
+        // 显示提示消息
+        function showToast(message, type) {
+            // 简单的提示实现
+            const alertClass = type === 'success' ? 'alert-success' : 
+                              type === 'error' ? 'alert-danger' : 
+                              type === 'warning' ? 'alert-warning' : 'alert-info';
+            
+            const toast = document.createElement('div');
+            toast.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // 切换股票监控状态
+        async function toggleStock(symbol, enabled) {
+            try {
+                await axios.patch(`/api/monitoring/stocks/${symbol}`, { enabled });
+                loadStockList();
+            } catch (error) {
+                console.error('切换股票状态失败:', error);
+            }
+        }
+
+        // 删除股票
+        async function deleteStock(symbol) {
+            if (confirm('确定要删除这只股票的监控吗？')) {
+                try {
+                    await axios.delete(`/api/monitoring/stocks/${symbol}`);
+                    loadStockList();
+                    showToast('股票删除成功', 'success');
+                } catch (error) {
+                    console.error('删除股票失败:', error);
+                    showToast('删除股票失败', 'error');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

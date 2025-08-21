@@ -9,7 +9,7 @@
 import asyncio
 import schedule
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple, Union
 from collections import defaultdict
 
 from ..models.models import TradeSignal, MarketAlert, TradeAction, OrderStatus
@@ -18,25 +18,30 @@ from ..core.monitor import StockMonitor
 from ..strategy.pressure_support_strategy import PressureSupportStrategy
 from ..notification.wecom_notifier import NotificationManager
 from ..utils.logger import LoggerMixin, log_trade_signal, log_trade_execution, log_system_status
+from ..utils.exceptions import (
+    RiskException, PositionException, OrderException, InsufficientFundsException,
+    TradingException, handle_async_exceptions
+)
+from ..utils.security import validate_trading_params, mask_sensitive_info
 
 
 class RiskManager(LoggerMixin):
     """风险管理器"""
     
-    def __init__(self, config):
+    def __init__(self):
         self.config = config
-        self.max_position_size = config.risk.max_position_size
-        self.max_positions = config.risk.max_positions
-        self.stop_loss = config.risk.stop_loss
-        self.take_profit = config.risk.take_profit
-        self.risk_tolerance = config.risk.risk_tolerance
+        self.max_position_size: float = self.config.risk.max_position_size
+        self.max_positions: int = self.config.risk.max_positions
+        self.stop_loss: float = self.config.risk.stop_loss
+        self.take_profit: float = self.config.risk.take_profit
+        self.risk_tolerance: float = self.config.risk.risk_tolerance
         
         # 当前持仓信息
-        self.current_positions = {}
-        self.daily_pnl = 0.0
-        self.total_exposure = 0.0
+        self.current_positions: Dict[str, Dict[str, Any]] = {}
+        self.daily_pnl: float = 0.0
+        self.total_exposure: float = 0.0
         
-    def check_risk_limits(self, signal: TradeSignal) -> tuple[bool, str]:
+    def check_risk_limits(self, signal: TradeSignal) -> Tuple[bool, str]:
         """检查风险限制
         
         Args:
@@ -46,38 +51,44 @@ class RiskManager(LoggerMixin):
             (是否通过风险检查, 原因)
         """
         try:
+            # 验证交易参数
+            if not validate_trading_params(signal.price, signal.quantity, signal.confidence):
+                raise RiskException("交易参数验证失败")
+            
             # 1. 检查最大持仓数量
             if signal.action == TradeAction.BUY:
                 if len(self.current_positions) >= self.max_positions:
-                    return False, f"超过最大持仓数量限制: {self.max_positions}"
+                    raise RiskException(f"超过最大持仓数量限制: {self.max_positions}")
             
             # 2. 检查单笔交易金额
             trade_amount = signal.price * signal.quantity
             if trade_amount > self.max_position_size:
-                return False, f"单笔交易金额超限: {trade_amount:.2f} > {self.max_position_size}"
+                raise RiskException(f"单笔交易金额超限: {trade_amount:.2f} > {self.max_position_size}")
             
             # 3. 检查总风险敞口
             if signal.action == TradeAction.BUY:
                 new_exposure = self.total_exposure + trade_amount
                 max_exposure = self.max_position_size * self.max_positions
                 if new_exposure > max_exposure:
-                    return False, f"总风险敞口超限: {new_exposure:.2f} > {max_exposure}"
+                    raise RiskException(f"总风险敞口超限: {new_exposure:.2f} > {max_exposure}")
             
             # 4. 检查日内亏损限制
             if self.daily_pnl < -self.max_position_size * self.risk_tolerance:
-                return False, f"日内亏损超限: {self.daily_pnl:.2f}"
+                raise RiskException(f"日内亏损超限: {self.daily_pnl:.2f}")
             
             # 5. 检查信心度阈值
             if signal.confidence < 0.6:  # 最低信心度要求
-                return False, f"信心度过低: {signal.confidence:.2%}"
+                raise RiskException(f"信心度过低: {signal.confidence:.2%}")
             
             return True, "风险检查通过"
             
+        except RiskException:
+            raise
         except Exception as e:
             self.logger.error(f"风险检查异常: {e}")
-            return False, f"风险检查异常: {e}"
+            raise RiskException(f"风险检查系统错误: {e}") from e
     
-    def update_position(self, symbol: str, action: TradeAction, quantity: int, price: float):
+    def update_position(self, symbol: str, action: TradeAction, quantity: int, price: float) -> None:
         """更新持仓信息
         
         Args:
@@ -85,8 +96,14 @@ class RiskManager(LoggerMixin):
             action: 交易动作
             quantity: 数量
             price: 价格
+            
+        Raises:
+            PositionException: 持仓操作异常
         """
         try:
+            # 验证输入参数
+            if not validate_trading_params(price, quantity, 1.0):
+                raise PositionException("持仓更新参数验证失败")
             if action == TradeAction.BUY:
                 if symbol in self.current_positions:
                     # 加仓
@@ -121,10 +138,13 @@ class RiskManager(LoggerMixin):
                         if pos['quantity'] == 0:
                             del self.current_positions[symbol]
                     else:
-                        self.logger.warning(f"卖出数量超过持仓: {symbol}")
+                        raise PositionException(f"卖出数量超过持仓: {symbol}")
                         
+        except PositionException:
+            raise
         except Exception as e:
             self.logger.error(f"更新持仓信息失败: {e}")
+            raise PositionException(f"持仓更新系统错误: {e}") from e
     
     def get_risk_summary(self) -> Dict[str, Any]:
         """获取风险摘要
@@ -145,9 +165,9 @@ class RiskManager(LoggerMixin):
 class TradeExecutor(LoggerMixin):
     """交易执行器（模拟）"""
     
-    def __init__(self, config):
+    def __init__(self):
         self.config = config
-        self.commission_rate = 0.0003  # 手续费率
+        self.commission_rate = self.config.trade.commission_rate  # 手续费率
         self.executed_trades = []
         
     async def execute_trade(self, signal: TradeSignal) -> tuple[bool, str]:
@@ -227,19 +247,22 @@ class TradeExecutor(LoggerMixin):
         }
 
 
+from .config import config
+
+
 class TradingEngine(LoggerMixin):
     """交易引擎主类"""
     
-    def __init__(self, config):
+    def __init__(self):
         self.config = config
         
         # 核心组件
-        self.data_manager = None
-        self.monitor = None
-        self.strategy = None
-        self.risk_manager = None
-        self.trade_executor = None
-        self.notification_manager = None
+        self.data_manager = DataManager()
+        self.risk_manager = RiskManager()
+        self.trade_executor = TradeExecutor()
+        self.strategy = PressureSupportStrategy(self.data_manager)
+        self.monitor = StockMonitor(self.config, self.data_manager)
+        self.notification_manager = NotificationManager()
         
         # 运行状态
         self.is_running = False
@@ -263,20 +286,20 @@ class TradingEngine(LoggerMixin):
             await self.data_manager.initialize()
             
             # 初始化风险管理器
-            self.risk_manager = RiskManager(self.config)
+            self.risk_manager = RiskManager()
             
             # 初始化交易执行器
-            self.trade_executor = TradeExecutor(self.config)
+            self.trade_executor = TradeExecutor()
             
             # 初始化策略
-            self.strategy = PressureSupportStrategy(self.config, self.data_manager)
+            self.strategy = PressureSupportStrategy(self.data_manager)
             
             # 初始化监控器
             self.monitor = StockMonitor(self.config, self.data_manager)
             self.monitor.add_alert_callback(self._handle_market_alert)
             
             # 初始化通知管理器
-            self.notification_manager = NotificationManager(self.config)
+            self.notification_manager = NotificationManager()
             await self.notification_manager.initialize()
             
             # 设置定时任务

@@ -43,6 +43,8 @@ class AlertLevel(Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+    INFO = "info"
+    WARNING = "warning"
 
 
 class Stock(Base):

@@ -8,13 +8,67 @@
 
 import json
 import asyncio
-import aiohttp
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
+# Use top-level aiohttp stub to align with tests patch target
+from aiohttp import ClientSession, ClientError, ClientTimeout
+
 from ..models.models import TradeSignal, MarketAlert, TradeAction, AlertLevel
 from ..utils.logger import LoggerMixin, log_notification_sent
+from ..core.config import config
+
+
+class StockAlertType(Enum):
+    """股票预警类型枚举"""
+    PRICE_BREAKOUT = "price_breakout"  # 价格突破
+    VOLUME_SPIKE = "volume_spike"      # 成交量异常
+    TECHNICAL_SIGNAL = "technical_signal"  # 技术指标信号
+    NEWS_IMPACT = "news_impact"        # 新闻影响
+    RISK_WARNING = "risk_warning"      # 风险预警
+    PROFIT_TARGET = "profit_target"    # 盈利目标
+    STOP_LOSS = "stop_loss"           # 止损预警
+
+
+class N8nWorkflowTrigger:
+    """N8n工作流触发器"""
+    
+    def __init__(self, webhook_url: str):
+        self.webhook_url = webhook_url
+        self.session = None
+    
+    async def initialize(self):
+        """初始化N8n触发器"""
+        self.session = ClientSession()
+    
+    async def trigger_workflow(self, workflow_data: Dict[str, Any]) -> bool:
+        """触发N8n工作流
+        
+        Args:
+            workflow_data: 工作流数据
+            
+        Returns:
+            是否触发成功
+        """
+        try:
+            if not self.session:
+                await self.initialize()
+            
+            async with self.session.post(
+                self.webhook_url,
+                json=workflow_data,
+                timeout=ClientTimeout(total=10)
+            ) as response:
+                return response.status == 200
+                
+        except Exception:
+            return False
+    
+    async def close(self):
+        """关闭触发器"""
+        if self.session:
+            await self.session.close()
 
 
 class MessageType(Enum):
@@ -40,7 +94,7 @@ class WeComNotifier(LoggerMixin):
             是否初始化成功
         """
         try:
-            self.session = aiohttp.ClientSession()
+            self.session = ClientSession()
             
             # 测试连接
             test_message = {
@@ -258,6 +312,76 @@ class WeComNotifier(LoggerMixin):
         
         return message
     
+    def _build_stock_alert_message(self, symbol: str, name: str, alert_type: StockAlertType, 
+                                 current_value: float, threshold: float, 
+                                 message: str, level: AlertLevel) -> Dict[str, Any]:
+        """构建股票预警消息
+        
+        Args:
+            symbol: 股票代码
+            name: 股票名称
+            alert_type: 预警类型
+            current_value: 当前值
+            threshold: 阈值
+            message: 预警消息
+            level: 预警级别
+            
+        Returns:
+            企业微信消息格式
+        """
+        # 预警级别配置
+        level_config = {
+            AlertLevel.LOW: {"color": "info", "icon": "ℹ️", "text": "提醒"},
+            AlertLevel.MEDIUM: {"color": "warning", "icon": "⚠️", "text": "警告"},
+            AlertLevel.HIGH: {"color": "warning", "icon": "🔶", "text": "重要"},
+            AlertLevel.CRITICAL: {"color": "warning", "icon": "🚨", "text": "紧急"}
+        }
+        
+        config_info = level_config.get(level, level_config[AlertLevel.LOW])
+        
+        # 预警类型图标
+        type_icons = {
+            StockAlertType.PRICE_BREAKOUT: "🚀",
+            StockAlertType.VOLUME_SPIKE: "📈",
+            StockAlertType.TECHNICAL_SIGNAL: "📊",
+            StockAlertType.NEWS_IMPACT: "📰",
+            StockAlertType.RISK_WARNING: "⚠️",
+            StockAlertType.PROFIT_TARGET: "🎯",
+            StockAlertType.STOP_LOSS: "🛑"
+        }
+        
+        type_icon = type_icons.get(alert_type, "📊")
+        stock_display = f"{name}({symbol})" if name else symbol
+        
+        content = f"""
+## {config_info['icon']} 股票预警
+
+**股票**: {type_icon} `{stock_display}`
+**预警类型**: {alert_type.value.upper()}
+**预警级别**: <font color="{config_info['color']}">{config_info['text']}</font>
+**当前值**: {current_value:.4f}
+**阈值**: {threshold:.4f}
+**时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+**详情**: {message}
+
+---
+*智能监控系统*
+"""
+        
+        message = {
+            "msgtype": "markdown",
+            "markdown": {
+                "content": content
+            }
+        }
+        
+        # 高级别预警@所有人
+        if level in [AlertLevel.HIGH, AlertLevel.CRITICAL]:
+            message["markdown"]["content"] += "\n\n<@all>"
+        
+        return message
+    
     def _build_system_status_message(self, status: Dict[str, Any]) -> Dict[str, Any]:
         """构建系统状态消息
         
@@ -370,7 +494,7 @@ class WeComNotifier(LoggerMixin):
                 self.webhook_url, 
                 json=message, 
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=ClientTimeout(total=10)
             ) as response:
                 
                 if response.status == 200:
@@ -436,10 +560,11 @@ class WeComNotifier(LoggerMixin):
 class NotificationManager(LoggerMixin):
     """通知管理器"""
     
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
         self.wecom_notifier = None
+        self.n8n_trigger = None
         self.enabled = config.notification.wecom_enabled
+        self.n8n_enabled = config.web.n8n.enabled
         
     async def initialize(self) -> bool:
         """初始化通知管理器
@@ -447,31 +572,53 @@ class NotificationManager(LoggerMixin):
         Returns:
             是否初始化成功
         """
-        if not self.enabled:
-            self.logger.info("企业微信通知已禁用")
-            return True
-            
-        try:
-            webhook_url = self.config.notification.wecom_webhook_url
-            mention_all = self.config.notification.mention_all
-            
-            if not webhook_url:
-                self.logger.error("企业微信Webhook URL未配置")
-                return False
-            
-            self.wecom_notifier = WeComNotifier(webhook_url, mention_all)
-            success = await self.wecom_notifier.initialize()
-            
-            if success:
-                self.logger.info("通知管理器初始化成功")
-            else:
-                self.logger.error("通知管理器初始化失败")
+        success = True
+        
+        # 初始化企业微信通知
+        if self.enabled:
+            try:
+                webhook_url = config.notification.wecom_webhook_url
+                mention_all = config.notification.mention_all
                 
-            return success
+                if not webhook_url:
+                    self.logger.error("企业微信Webhook URL未配置")
+                    success = False
+                else:
+                    self.wecom_notifier = WeComNotifier(webhook_url, mention_all)
+                    wecom_success = await self.wecom_notifier.initialize()
+                    if not wecom_success:
+                        self.logger.error("企业微信通知器初始化失败")
+                        success = False
+                    else:
+                        self.logger.info("企业微信通知器初始化成功")
+                        
+            except Exception as e:
+                self.logger.error(f"企业微信通知器初始化异常: {e}")
+                success = False
+        else:
+            self.logger.info("企业微信通知已禁用")
+        
+        # 初始化n8n工作流触发器
+        if self.n8n_enabled:
+            try:
+                webhook_url = config.web.n8n.webhook_url
+                if webhook_url:
+                    self.n8n_trigger = N8nWorkflowTrigger(webhook_url)
+                    await self.n8n_trigger.initialize()
+                    self.logger.info("N8n工作流触发器初始化成功")
+                else:
+                    self.logger.warning("N8n Webhook URL未配置")
+            except Exception as e:
+                self.logger.error(f"N8n工作流触发器初始化异常: {e}")
+        else:
+            self.logger.info("N8n工作流集成已禁用")
+        
+        if success:
+            self.logger.info("通知管理器初始化完成")
+        else:
+            self.logger.error("通知管理器初始化失败")
             
-        except Exception as e:
-            self.logger.error(f"通知管理器初始化异常: {e}")
-            return False
+        return success
     
     async def notify_trade_signal(self, signal: TradeSignal) -> bool:
         """通知交易信号
@@ -496,10 +643,85 @@ class NotificationManager(LoggerMixin):
         Returns:
             是否通知成功
         """
-        if not self.enabled or not self.wecom_notifier:
-            return True
+        success = True
+        
+        # 发送企业微信通知
+        if self.enabled and self.wecom_notifier:
+            wecom_success = await self.wecom_notifier.send_market_alert(alert)
+            if not wecom_success:
+                success = False
+        
+        # 触发n8n工作流
+        if self.n8n_enabled and self.n8n_trigger:
+            workflow_data = {
+                "type": "market_alert",
+                "symbol": alert.symbol,
+                "alert_type": alert.alert_type,
+                "level": alert.level.value,
+                "message": alert.message,
+                "current_price": alert.current_price,
+                "threshold": alert.threshold,
+                "timestamp": alert.timestamp.isoformat()
+            }
             
-        return await self.wecom_notifier.send_market_alert(alert)
+            n8n_success = await self.n8n_trigger.trigger_workflow(workflow_data)
+            if not n8n_success:
+                self.logger.warning("N8n工作流触发失败")
+        
+        return success
+    
+    async def notify_stock_alert(self, symbol: str, name: str, alert_type: StockAlertType,
+                               current_value: float, threshold: float, 
+                               message: str, level: AlertLevel) -> bool:
+        """通知股票预警
+        
+        Args:
+            symbol: 股票代码
+            name: 股票名称
+            alert_type: 预警类型
+            current_value: 当前值
+            threshold: 阈值
+            message: 预警消息
+            level: 预警级别
+            
+        Returns:
+            是否通知成功
+        """
+        success = True
+        
+        # 发送企业微信通知
+        if self.enabled and self.wecom_notifier:
+            try:
+                stock_message = self.wecom_notifier._build_stock_alert_message(
+                    symbol, name, alert_type, current_value, threshold, message, level
+                )
+                wecom_success = await self.wecom_notifier._send_message(stock_message)
+                if not wecom_success:
+                    success = False
+                    
+            except Exception as e:
+                self.logger.error(f"发送股票预警企微通知失败: {e}")
+                success = False
+        
+        # 触发n8n工作流
+        if self.n8n_enabled and self.n8n_trigger:
+            workflow_data = {
+                "type": "stock_alert",
+                "symbol": symbol,
+                "name": name,
+                "alert_type": alert_type.value,
+                "level": level.value,
+                "current_value": current_value,
+                "threshold": threshold,
+                "message": message,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            n8n_success = await self.n8n_trigger.trigger_workflow(workflow_data)
+            if not n8n_success:
+                self.logger.warning("股票预警N8n工作流触发失败")
+        
+        return success
     
     async def notify_system_status(self, status: Dict[str, Any]) -> bool:
         """通知系统状态
@@ -548,3 +770,8 @@ class NotificationManager(LoggerMixin):
         """关闭通知管理器"""
         if self.wecom_notifier:
             await self.wecom_notifier.close()
+        
+        if self.n8n_trigger:
+            await self.n8n_trigger.close()
+            
+        self.logger.info("通知管理器已关闭")

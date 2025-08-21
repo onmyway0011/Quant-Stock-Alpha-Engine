@@ -22,7 +22,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # 导入测试模块
-from tests.test_config import TestConfig
+from tests.test_config import TestPydanticConfig
 from tests.test_data_provider import TestDataProvider
 from tests.test_strategy import TestStrategy
 from tests.test_monitor import TestMonitor
@@ -146,7 +146,7 @@ class TestRunner:
     def __init__(self, verbosity=2):
         self.verbosity = verbosity
         self.test_modules = {
-            'config': TestConfig,
+            'config': TestPydanticConfig,
             'data_provider': TestDataProvider,
             'strategy': TestStrategy,
             'monitor': TestMonitor,
@@ -171,6 +171,11 @@ class TestRunner:
             print(f"\n📦 加载 {module_name} 测试模块...")
             module_suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
             suite.addTest(module_suite)
+        
+        # 添加异常处理测试套件
+        from tests.test_exceptions import TestExceptionHandling
+        print("\n📦 加载 exceptions 测试模块...")
+        suite.addTest(unittest.TestLoader().loadTestsFromTestCase(TestExceptionHandling))
         
         # 运行测试
         print(f"\n🧪 开始执行测试...")

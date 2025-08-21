@@ -250,6 +250,157 @@
                     </div>
                 </div>
             </div>
+
+            <!-- AI分析配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-robot"></i> AI分析配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="ai_analysis.enabled" 
+                                   {{ 'checked' if config_data.ai_analysis and config_data.ai_analysis.enabled else '' }}>
+                            <label class="form-check-label">启用AI分析功能</label>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">LLM提供商</label>
+                                <select class="form-select" name="ai_analysis.llm_provider">
+                                    <option value="deepseek" {{ 'selected' if config_data.ai_analysis and config_data.ai_analysis.llm_provider == 'deepseek' else '' }}>DeepSeek</option>
+                                    <option value="dashscope" {{ 'selected' if config_data.ai_analysis and config_data.ai_analysis.llm_provider == 'dashscope' else '' }}>阿里百炼</option>
+                                    <option value="google" {{ 'selected' if config_data.ai_analysis and config_data.ai_analysis.llm_provider == 'google' else '' }}>Google AI</option>
+                                    <option value="openrouter" {{ 'selected' if config_data.ai_analysis and config_data.ai_analysis.llm_provider == 'openrouter' else '' }}>OpenRouter</option>
+                                    <option value="openai" {{ 'selected' if config_data.ai_analysis and config_data.ai_analysis.llm_provider == 'openai' else '' }}>OpenAI</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" class="form-control" name="ai_analysis.model_name" 
+                                       value="{{ config_data.ai_analysis.model_name if config_data.ai_analysis else 'deepseek-chat' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">API密钥</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" name="ai_analysis.api_key" 
+                                           value="{{ config_data.ai_analysis.api_key if config_data.ai_analysis else '' }}">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="testAIConnection(this)">
+                                        <i class="bi bi-wifi"></i> 测试
+                                    </button>
+                                </div>
+                                <div class="test-result" id="ai-analysis-test-result" style="display: none;"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">基础URL</label>
+                                <input type="url" class="form-control" name="ai_analysis.base_url" 
+                                       value="{{ config_data.ai_analysis.base_url if config_data.ai_analysis else '' }}"
+                                       placeholder="可选，如使用自定义API端点">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">分析间隔 (秒)</label>
+                                <input type="number" class="form-control" name="ai_analysis.analysis_interval" 
+                                       min="300" max="86400"
+                                       value="{{ config_data.ai_analysis.analysis_interval if config_data.ai_analysis else 1800 }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">最大令牌数</label>
+                                <input type="number" class="form-control" name="ai_analysis.max_tokens" 
+                                       min="512" max="8192"
+                                       value="{{ config_data.ai_analysis.max_tokens if config_data.ai_analysis else 2048 }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="ai_analysis.enable_sentiment_analysis" 
+                                       {{ 'checked' if config_data.ai_analysis and config_data.ai_analysis.enable_sentiment_analysis else 'checked' }}>
+                                <label class="form-check-label">情感分析</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="ai_analysis.enable_technical_analysis" 
+                                       {{ 'checked' if config_data.ai_analysis and config_data.ai_analysis.enable_technical_analysis else 'checked' }}>
+                                <label class="form-check-label">技术分析</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="ai_analysis.enable_news_analysis" 
+                                       {{ 'checked' if config_data.ai_analysis and config_data.ai_analysis.enable_news_analysis else 'checked' }}>
+                                <label class="form-check-label">新闻分析</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新闻RSS配置 -->
+            <div class="config-section">
+                <div class="config-section-header">
+                    <i class="bi bi-newspaper"></i> 新闻RSS配置
+                </div>
+                <div class="config-section-body">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="news_rss.enabled" 
+                                   {{ 'checked' if config_data.news_rss and config_data.news_rss.enabled else '' }}>
+                            <label class="form-check-label">启用新闻RSS功能</label>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">RSS源列表</label>
+                                <textarea class="form-control" name="news_rss.rss_sources" rows="4" 
+                                          placeholder="每行一个RSS源URL">{{ config_data.news_rss.rss_sources | join('\n') if config_data.news_rss and config_data.news_rss.rss_sources else 'https://feeds.finance.yahoo.com/rss/2.0/headline\nhttp://rss.cnn.com/rss/money_latest.rss' }}</textarea>
+                                <div class="form-text">每行输入一个RSS源URL</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">抓取间隔 (秒)</label>
+                                <input type="number" class="form-control" name="news_rss.fetch_interval" 
+                                       min="300" max="86400"
+                                       value="{{ config_data.news_rss.fetch_interval if config_data.news_rss else 3600 }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">最大文章数量</label>
+                                <input type="number" class="form-control" name="news_rss.max_articles" 
+                                       min="10" max="1000"
+                                       value="{{ config_data.news_rss.max_articles if config_data.news_rss else 100 }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">存储天数</label>
+                                <input type="number" class="form-control" name="news_rss.storage_days" 
+                                       min="1" max="365"
+                                       value="{{ config_data.news_rss.storage_days if config_data.news_rss else 30 }}">
+                            </div>
+                            <div class="mb-3">
+                                <div class="input-group">
+                                    <span class="input-group-text">测试RSS连接</span>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="testRSSConnection(this)">
+                                        <i class="bi bi-wifi"></i> 测试
+                                    </button>
+                                </div>
+                                <div class="test-result" id="news-rss-test-result" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">关键词过滤器</label>
+                        <input type="text" class="form-control" name="news_rss.keywords_filter" 
+                               value="{{ config_data.news_rss.keywords_filter | join(', ') if config_data.news_rss and config_data.news_rss.keywords_filter else '' }}"
+                               placeholder="用逗号分隔关键词，如：股票,金融,投资">
+                        <div class="form-text">用逗号分隔的关键词，用于过滤相关新闻</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -405,6 +556,91 @@ function testConnection(type, button) {
     });
 }
 
+// 测试AI分析连接
+function testAIConnection(button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> 测试中...';
+    button.disabled = true;
+    
+    const formData = getFormData();
+    
+    // 获取AI配置数据
+    const aiConfig = {
+        llm_provider: formData.config.ai_analysis?.llm_provider,
+        model_name: formData.config.ai_analysis?.model_name,
+        api_key: formData.config.ai_analysis?.api_key,
+        base_url: formData.config.ai_analysis?.base_url
+    };
+    
+    axios.post('/api/test-connection', {
+        type: 'ai_analysis',
+        config: aiConfig
+    })
+    .then(response => {
+        const resultDiv = document.getElementById('ai-analysis-test-result');
+        resultDiv.style.display = 'block';
+        
+        if (response.data.success) {
+            resultDiv.className = 'test-result test-success';
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ' + response.data.message;
+        } else {
+            resultDiv.className = 'test-result test-error';
+            resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> ' + response.data.message;
+        }
+    })
+    .catch(error => {
+        const resultDiv = document.getElementById('ai-analysis-test-result');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'test-result test-error';
+        resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> 连接测试失败: ' + error.message;
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// 测试RSS连接
+function testRSSConnection(button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> 测试中...';
+    button.disabled = true;
+    
+    const formData = getFormData();
+    
+    // 获取RSS配置数据
+    const rssConfig = {
+        rss_sources: formData.config.news_rss?.rss_sources
+    };
+    
+    axios.post('/api/test-connection', {
+        type: 'news_rss',
+        config: rssConfig
+    })
+    .then(response => {
+        const resultDiv = document.getElementById('news-rss-test-result');
+        resultDiv.style.display = 'block';
+        
+        if (response.data.success) {
+            resultDiv.className = 'test-result test-success';
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ' + response.data.message;
+        } else {
+            resultDiv.className = 'test-result test-error';
+            resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> ' + response.data.message;
+        }
+    })
+    .catch(error => {
+        const resultDiv = document.getElementById('news-rss-test-result');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'test-result test-error';
+        resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> 连接测试失败: ' + error.message;
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
 // 获取表单数据
 function getFormData() {
     const form = document.getElementById('configForm');
@@ -433,6 +669,32 @@ function getFormData() {
     // 处理股票列表
     if (config.monitoring && config.monitoring.stocks) {
         config.monitoring.stocks = config.monitoring.stocks.split('\n').filter(s => s.trim());
+    }
+    
+    // 将新闻RSS的rss_sources转换为数组
+    if (config.news_rss && typeof config.news_rss.rss_sources === 'string') {
+        config.news_rss.rss_sources = config.news_rss.rss_sources
+            .split('\n')
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    // 将新闻RSS的keywords_filter转换为数组（逗号分隔）
+    if (config.news_rss && typeof config.news_rss.keywords_filter === 'string') {
+        config.news_rss.keywords_filter = config.news_rss.keywords_filter
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    // 可选：将AI分析中的数值字段转为数字类型
+    if (config.ai_analysis) {
+        if (config.ai_analysis.analysis_interval !== undefined && config.ai_analysis.analysis_interval !== '') {
+            config.ai_analysis.analysis_interval = parseInt(config.ai_analysis.analysis_interval, 10);
+        }
+        if (config.ai_analysis.max_tokens !== undefined && config.ai_analysis.max_tokens !== '') {
+            config.ai_analysis.max_tokens = parseInt(config.ai_analysis.max_tokens, 10);
+        }
     }
     
     // 转换百分比为小数

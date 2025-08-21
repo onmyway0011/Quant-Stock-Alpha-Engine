@@ -17,6 +17,7 @@ from pathlib import Path
 import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / 'src'))
 
 from src.strategy.pressure_support_strategy import (
     PressureSupportStrategy, TechnicalAnalyzer, 
@@ -177,9 +178,9 @@ class TestStrategy(unittest.TestCase):
     
     def test_pressure_support_strategy_initialization(self):
         """测试压力支撑策略初始化"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
-        self.assertEqual(strategy.config, self.mock_config)
+        self.assertTrue(hasattr(strategy, 'data_manager'))
         self.assertEqual(strategy.data_manager, self.mock_data_manager)
         self.assertEqual(strategy.analysis_period, 6)
         self.assertEqual(strategy.pressure_factor, 1.05)
@@ -187,7 +188,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_analyze_market(self):
         """测试市场分析"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 模拟数据管理器返回
         self.mock_data_manager.get_historical_data.return_value = self.test_historical_data
@@ -207,7 +208,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_generate_signal(self):
         """测试交易信号生成"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 模拟数据管理器返回
         self.mock_data_manager.get_historical_data.return_value = self.test_historical_data
@@ -229,7 +230,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_buy_signal_conditions(self):
         """测试买入信号条件"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 创建有利于买入的市场分析
         analysis = MarketAnalysis(
@@ -261,7 +262,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_sell_signal_conditions(self):
         """测试卖出信号条件"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 创建有利于卖出的市场分析
         analysis = MarketAnalysis(
@@ -293,7 +294,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_hold_signal_conditions(self):
         """测试持有信号条件"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 创建不明确的市场分析
         analysis = MarketAnalysis(
@@ -316,7 +317,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_position_size_calculation(self):
         """测试仓位大小计算"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 测试正常价格
         quantity = strategy._calculate_position_size(12.50)
@@ -333,7 +334,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_dataframe_standardization(self):
         """测试数据框标准化"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 测试Tushare格式
         tushare_df = pd.DataFrame({
@@ -362,7 +363,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_find_nearest_level(self):
         """测试寻找最近支撑/阻力位"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         levels = [
             SupportResistanceLevel(10.0, 0.8, 3, datetime.now(), 'support'),
@@ -385,7 +386,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_error_handling(self):
         """测试策略错误处理"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 模拟数据获取失败
         self.mock_data_manager.get_historical_data.return_value = pd.DataFrame()
@@ -404,7 +405,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_info(self):
         """测试策略信息获取"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         info = strategy.get_strategy_info()
         
@@ -416,7 +417,7 @@ class TestStrategy(unittest.TestCase):
     
     def test_strategy_confidence_calculation(self):
         """测试信心度计算"""
-        strategy = PressureSupportStrategy(self.mock_config, self.mock_data_manager)
+        strategy = PressureSupportStrategy(self.mock_data_manager)
         
         # 测试多个信号的信心度计算
         analysis = MarketAnalysis(

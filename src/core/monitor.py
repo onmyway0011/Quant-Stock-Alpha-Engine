@@ -16,6 +16,7 @@ from collections import defaultdict, deque
 from ..models.models import StockData, MarketAlert, AlertLevel
 from ..utils.logger import LoggerMixin, log_market_alert, log_system_status
 from ..data.data_provider import DataManager
+from ..core.config import config as default_config
 
 
 class VolatilityCalculator:
@@ -146,19 +147,20 @@ class AlertQueue:
 class StockMonitor(LoggerMixin):
     """股票监控器"""
     
-    def __init__(self, config, data_manager: DataManager):
-        self.config = config
-        self.data_manager = data_manager
+    def __init__(self, config=None, data_manager: DataManager = None):
+        self.config = config or default_config
+        self.data_manager = data_manager or DataManager(self.config)
         self.alert_queue = AlertQueue()
         
         # 监控配置
-        self.symbols = config.monitoring.stocks
-        self.volatility_threshold = config.monitoring.volatility_threshold
-        self.check_interval = config.monitoring.check_interval
+        self.symbols = self.config.monitoring.stocks
+        self.volatility_threshold = self.config.monitoring.volatility_threshold
+        self.check_interval = self.config.monitoring.check_interval
+        self.history_size = self.config.monitoring.history_size
         
         # 数据缓存
-        self.price_history = defaultdict(lambda: deque(maxlen=100))
-        self.volume_history = defaultdict(lambda: deque(maxlen=100))
+        self.price_history = defaultdict(lambda: deque(maxlen=self.history_size))
+        self.volume_history = defaultdict(lambda: deque(maxlen=self.history_size))
         self.last_prices = {}
         
         # 监控状态

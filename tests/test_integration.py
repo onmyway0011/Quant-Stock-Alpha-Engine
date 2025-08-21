@@ -19,6 +19,7 @@ from pathlib import Path
 import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / 'src'))
 
 from src.core.engine import TradingEngine
 from src.core.config import Config
@@ -183,7 +184,7 @@ class TestIntegration(unittest.TestCase):
         async def test_notification_integration():
             from src.notification.wecom_notifier import NotificationManager
             
-            notification_manager = NotificationManager(config)
+            notification_manager = NotificationManager()
             success = await notification_manager.initialize()
             
             self.assertTrue(success)
@@ -355,7 +356,7 @@ class TestIntegration(unittest.TestCase):
             data_manager = DataManager(config)
             await data_manager.initialize()
             
-            strategy = PressureSupportStrategy(config, data_manager)
+            strategy = PressureSupportStrategy(data_manager)
             
             # 测试市场分析
             analysis = await strategy.analyze_market('000001.SZ')

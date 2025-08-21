@@ -22,7 +22,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from src.core.engine import TradingEngine
-from src.core.config import Config
+from src.core.config import config
 from src.utils.logger import setup_logger
 from loguru import logger
 
@@ -31,7 +31,6 @@ class QuantStockAlphaEngine:
     """量化股票Alpha引擎主类"""
     
     def __init__(self):
-        self.config = Config()
         self.engine = None
         self.running = False
         
@@ -39,11 +38,11 @@ class QuantStockAlphaEngine:
         """启动系统"""
         try:
             # 设置日志
-            setup_logger(self.config)
+            setup_logger(config)
             logger.info("🚀 启动量化股票交易系统...")
             
             # 初始化交易引擎
-            self.engine = TradingEngine(self.config)
+            self.engine = TradingEngine()
             await self.engine.initialize()
             
             # 设置信号处理

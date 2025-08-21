@@ -9,18 +9,9 @@
 __version__ = "1.0.0"
 __author__ = "Quant Team"
 
-# 导出主要测试类
-from .test_config import TestConfig
-from .test_data_provider import TestDataProvider
-from .test_strategy import TestStrategy
-from .test_monitor import TestMonitor
-from .test_notification import TestNotification
-from .test_engine import TestEngine
-from .test_web import TestWebInterface
-from .test_integration import TestIntegration
-
+# 测试包初始化，不自动导入测试类避免导入错误
 __all__ = [
-    'TestConfig',
+    'TestPydanticConfig',
     'TestDataProvider',
     'TestStrategy',
     'TestMonitor',
