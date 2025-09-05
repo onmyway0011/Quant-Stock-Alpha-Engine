@@ -156,7 +156,7 @@ class StockMonitor(LoggerMixin):
         self.symbols = self.config.monitoring.stocks
         self.volatility_threshold = self.config.monitoring.volatility_threshold
         self.check_interval = self.config.monitoring.check_interval
-        self.history_size = self.config.monitoring.history_size
+        self.history_size = int(self.config.monitoring.history_size)  # 确保为整数
         
         # 数据缓存
         self.price_history = defaultdict(lambda: deque(maxlen=self.history_size))

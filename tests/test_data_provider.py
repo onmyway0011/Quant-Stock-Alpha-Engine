@@ -106,6 +106,8 @@ class TestDataProvider(unittest.TestCase):
         })
         
         provider = AkshareProvider()
+        provider.is_available = True
+        provider.ak = mock_ak  # 添加这行以正确设置mock对象
         
         async def test_init():
             result = await provider.initialize()
@@ -181,7 +183,7 @@ class TestDataProvider(unittest.TestCase):
         """测试Akshare获取实时数据"""
         # 模拟akshare数据
         mock_ak.stock_zh_a_spot_em.return_value = pd.DataFrame({
-            '代码': ['000001'],
+            '代码': ['000001'],  # 确保代码匹配
             '名称': ['平安银行'],
             '最新价': [12.50],
             '涨跌额': [0.50],
@@ -194,6 +196,7 @@ class TestDataProvider(unittest.TestCase):
         
         provider = AkshareProvider()
         provider.is_available = True
+        provider.ak = mock_ak  # 添加这行
         
         async def test_get_data():
             data = await provider.get_realtime_data(['000001.SZ'])

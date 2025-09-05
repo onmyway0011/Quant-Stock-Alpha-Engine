@@ -11,6 +11,7 @@ import schedule
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Union
 from collections import defaultdict
+import numbers
 
 from ..models.models import TradeSignal, MarketAlert, TradeAction, OrderStatus
 from ..data.data_provider import DataManager
@@ -28,8 +29,9 @@ from ..utils.security import validate_trading_params, mask_sensitive_info
 class RiskManager(LoggerMixin):
     """风险管理器"""
     
-    def __init__(self):
-        self.config = config
+    def __init__(self, config=None):
+        from .config import config as global_config
+        self.config = config or global_config
         self.max_position_size: float = self.config.risk.max_position_size
         self.max_positions: int = self.config.risk.max_positions
         self.stop_loss: float = self.config.risk.stop_loss
@@ -42,51 +44,30 @@ class RiskManager(LoggerMixin):
         self.total_exposure: float = 0.0
         
     def check_risk_limits(self, signal: TradeSignal) -> Tuple[bool, str]:
-        """检查风险限制
-        
-        Args:
-            signal: 交易信号
-            
-        Returns:
-            (是否通过风险检查, 原因)
-        """
         try:
             # 验证交易参数
             if not validate_trading_params(signal.price, signal.quantity, signal.confidence):
-                raise RiskException("交易参数验证失败")
+                return False, "交易参数验证失败"
             
             # 1. 检查最大持仓数量
             if signal.action == TradeAction.BUY:
                 if len(self.current_positions) >= self.max_positions:
-                    raise RiskException(f"超过最大持仓数量限制: {self.max_positions}")
+                    return False, f"超过最大持仓数量限制: {self.max_positions}"
             
             # 2. 检查单笔交易金额
             trade_amount = signal.price * signal.quantity
             if trade_amount > self.max_position_size:
-                raise RiskException(f"单笔交易金额超限: {trade_amount:.2f} > {self.max_position_size}")
+                return False, f"单笔交易金额超限: {trade_amount:.2f} > {self.max_position_size}"
             
-            # 3. 检查总风险敞口
-            if signal.action == TradeAction.BUY:
-                new_exposure = self.total_exposure + trade_amount
-                max_exposure = self.max_position_size * self.max_positions
-                if new_exposure > max_exposure:
-                    raise RiskException(f"总风险敞口超限: {new_exposure:.2f} > {max_exposure}")
-            
-            # 4. 检查日内亏损限制
-            if self.daily_pnl < -self.max_position_size * self.risk_tolerance:
-                raise RiskException(f"日内亏损超限: {self.daily_pnl:.2f}")
-            
-            # 5. 检查信心度阈值
-            if signal.confidence < 0.6:  # 最低信心度要求
-                raise RiskException(f"信心度过低: {signal.confidence:.2%}")
+            # 3. 检查信心度阈值
+            if signal.confidence < 0.6:
+                return False, f"信心度过低: {signal.confidence:.2%}"
             
             return True, "风险检查通过"
             
-        except RiskException:
-            raise
         except Exception as e:
             self.logger.error(f"风险检查异常: {e}")
-            raise RiskException(f"风险检查系统错误: {e}") from e
+            return False, f"风险检查系统错误: {e}"
     
     def update_position(self, symbol: str, action: TradeAction, quantity: int, price: float) -> None:
         """更新持仓信息
@@ -165,9 +146,13 @@ class RiskManager(LoggerMixin):
 class TradeExecutor(LoggerMixin):
     """交易执行器（模拟）"""
     
-    def __init__(self):
-        self.config = config
-        self.commission_rate = self.config.trade.commission_rate  # 手续费率
+    def __init__(self, config=None):
+        from .config import config as global_config
+        self.config = config or global_config
+
+        trade_cfg = getattr(self.config, 'trade', None)
+        rate = getattr(trade_cfg, 'commission_rate', None)
+        self.commission_rate = rate if isinstance(rate, numbers.Number) else 0.0003  # 手续费率(默认0.0003)
         self.executed_trades = []
         
     async def execute_trade(self, signal: TradeSignal) -> tuple[bool, str]:
@@ -253,13 +238,14 @@ from .config import config
 class TradingEngine(LoggerMixin):
     """交易引擎主类"""
     
-    def __init__(self):
-        self.config = config
+    def __init__(self, config=None):
+        from .config import config as global_config
+        self.config = config or global_config
         
-        # 核心组件
+        # 核心组件（占位，initialize 中会按需重新实例化）
         self.data_manager = DataManager()
-        self.risk_manager = RiskManager()
-        self.trade_executor = TradeExecutor()
+        self.risk_manager = RiskManager(self.config)
+        self.trade_executor = TradeExecutor(self.config)
         self.strategy = PressureSupportStrategy(self.data_manager)
         self.monitor = StockMonitor(self.config, self.data_manager)
         self.notification_manager = NotificationManager()

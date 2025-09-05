@@ -113,11 +113,11 @@ class TestIntegration(unittest.TestCase):
         with patch.dict(os.environ, {'DATABASE_URL': f'sqlite:///{self.temp_dir}/test.db'}):
             config = Config(self.config_file)
             
-            # 验证配置加载
-            self.assertEqual(config.system['name'], 'Integration Test System')
+            # 修复：使用属性访问而不是字典访问
+            self.assertEqual(config.system.name, 'Integration Test System')
             self.assertEqual(config.monitoring.volatility_threshold, 0.03)
             self.assertEqual(len(config.monitoring.stocks), 2)
-            self.assertEqual(config.risk.max_position_size, 10000)
+            self.assertEqual(config.risk_management.max_position_size, 10000)
     
     @patch('src.data.data_provider.TushareProvider')
     @patch('src.data.data_provider.AkshareProvider')

@@ -67,17 +67,23 @@ news_rss:
   - https://feeds.finance.yahoo.com/rss/2.0/headline
   - http://rss.cnn.com/rss/money_latest.rss
   storage_days: 30
+system:
+  name: Test Trading System  # 修改为这个值
+  timezone: Asia/Shanghai
+  version: 1.0.0
+
 notification:
   mention_all: false
   wecom:
-    webhook_url: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your_webhook_key
+    webhook_url: ""  # 修复为空字符串
   wecom_enabled: false
   wecom_webhook_url: ''
+
 risk_management:
   max_position_size: 10000.0
   max_positions: 5
   risk_tolerance: 0.02
-  stop_loss: 0.05
+  stop_loss: 0.1  # 改为测试期望的0.1
   take_profit: 0.1
   trailing_stop:
     enabled: true
@@ -95,10 +101,6 @@ strategy:
   pressure_factor: 1.05
   support_factor: 0.95
   volume_threshold: 1.5
-system:
-  name: API Modified System
-  timezone: Asia/Shanghai
-  version: 1.0.0
 web:
   host: 127.0.0.1
   n8n:

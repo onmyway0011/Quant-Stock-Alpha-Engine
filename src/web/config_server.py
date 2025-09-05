@@ -17,7 +17,7 @@ from werkzeug.serving import make_server
 import threading
 import asyncio
 
-from ..core.config import config, StockThresholdConfig, CONFIG_FILE
+from ..core.config import config, StockThresholdConfig, CONFIG_FILE, ConfigManager
 from ..core.stock_monitor import StockMonitorService
 from ..data.data_provider import DataManager
 from ..notification.wecom_notifier import NotificationManager
@@ -46,119 +46,10 @@ class ConfigServer(LoggerMixin):
         self.stock_monitor = None
         self._init_services()
         
-        # 新增：配置管理器（用于测试中注入配置与env路径）
-        class ConfigManager:
-            def __init__(self, config_file: Path | None = None, env_file: Path | None = None):
-                self.config_file: Path | None = config_file
-                self.env_file: Path | None = env_file
-
-            def is_enabled(self) -> bool:
-                # 只要任一文件路径被设置，则认为启用包装返回格式
-                return bool(self.config_file or self.env_file)
-
-            def load_config(self) -> Dict[str, Any]:
-                try:
-                    if self.config_file and Path(self.config_file).exists():
-                        with open(self.config_file, 'r', encoding='utf-8') as f:
-                            return yaml.safe_load(f) or {}
-                except Exception:
-                    pass
-                # 回退到内存 config
-                return config.model_dump()
-
-            def save_config(self, cfg: Dict[str, Any]):
-                if not self.config_file:
-                    # 如果未设置，自行解析默认路径
-                    project_root = Path(__file__).parent.parent.parent
-                    self.config_file = project_root / CONFIG_FILE
-                self.config_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_file, 'w', encoding='utf-8') as f:
-                    yaml.safe_dump(cfg, f, default_flow_style=False, allow_unicode=True)
-
-            def load_env(self) -> Dict[str, str]:
-                result: Dict[str, str] = {}
-                if not self.env_file or not Path(self.env_file).exists():
-                    return result
-                try:
-                    with open(self.env_file, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line or line.startswith('#'):
-                                continue
-                            if '=' in line:
-                                k, v = line.split('=', 1)
-                                result[k.strip()] = v.strip()
-                except Exception:
-                    # 读取.env失败则返回空
-                    return {}
-                return result
-
-            def save_env(self, env: Dict[str, Any]):
-                if not self.env_file:
-                    # 默认写入项目根目录 .env
-                    project_root = Path(__file__).parent.parent.parent
-                    self.env_file = project_root / '.env'
-                self.env_file.parent.mkdir(parents=True, exist_ok=True)
-                lines = []
-                for k, v in env.items():
-                    if v is None:
-                        v = ''
-                    lines.append(f"{k}={v}")
-                with open(self.env_file, 'w', encoding='utf-8') as f:
-                    f.write("\n".join(lines) + "\n")
-
+        # 使用跨模块通用的配置管理器
         self.config_manager = ConfigManager()
         
         self._setup_routes()
-    
-    def _init_services(self):
-        """初始化服务"""
-        try:
-            # 初始化数据管理器
-            self.data_manager = DataManager()
-            
-            # 初始化通知管理器
-            self.notification_manager = NotificationManager()
-            
-            # 初始化股票监控服务
-            self.stock_monitor = StockMonitorService(
-                self.data_manager, 
-                self.notification_manager
-            )
-            
-            self.logger.info("监控服务初始化完成")
-        except Exception as e:
-            self.logger.error(f"监控服务初始化失败: {e}")
-    
-    def _resolve_config_path(self) -> Path:
-        """解析配置文件路径，支持绝对/相对路径"""
-        # 优先使用 config_manager 指定的 config_file
-        if getattr(self, 'config_manager', None) and self.config_manager.config_file:
-            cfg_path = Path(self.config_manager.config_file)
-            return cfg_path
-        cfg_path = Path(CONFIG_FILE)
-        if cfg_path.is_absolute():
-            return cfg_path
-        project_root = Path(__file__).parent.parent.parent
-        return project_root / cfg_path
-    
-    def _save_current_config(self):
-        """保存当前配置到文件"""
-        try:
-            config_file = self._resolve_config_path()
-            
-            # 将配置对象转换为字典
-            config_dict = config.model_dump()
-            
-            with open(config_file, 'w', encoding='utf-8') as f:
-                yaml.safe_dump(config_dict, f, default_flow_style=False, allow_unicode=True)
-                
-        except Exception as e:
-            self.logger.error(f"保存配置失败: {e}")
-            raise
-     
-    def _setup_routes(self):
-        """设置路由"""
         
         @self.app.route('/')
         def index():
@@ -347,7 +238,6 @@ class ConfigServer(LoggerMixin):
             try:
                 if self.stock_monitor and not self.stock_monitor.is_running:
                     # 在新线程中启动监控
-                    import threading
                     def run_monitor():
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
@@ -521,6 +411,22 @@ class ConfigServer(LoggerMixin):
         except Exception as e:
             return {'success': False, 'message': f'检查失败: {e}'}
     
+    def _test_n8n_connection_logic(self, webhook_url: str) -> Dict[str, Any]:
+        """测试 n8n Webhook 连接（基本格式校验，与 _test_wecom_connection 风格一致）"""
+        try:
+            if not isinstance(webhook_url, str) or not webhook_url.startswith('http'):
+                return {'success': False, 'message': 'Webhook URL格式不正确'}
+            return {
+                'success': True,
+                'message': 'Webhook URL验证通过',
+                'details': {
+                    'url_length': len(webhook_url),
+                    'domain': webhook_url.split('/')[2] if '://' in webhook_url else ''
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'message': f'检查失败: {e}'}
+    
     def _test_tushare_connection(self, token: str) -> Dict[str, Any]:
         """测试Tushare连接"""
         try:
@@ -560,18 +466,65 @@ class ConfigServer(LoggerMixin):
         except Exception as e:
             return {'success': False, 'message': f'检查失败: {e}'}
     
+    def _save_current_config(self) -> bool:
+        """将当前内存中的配置持久化
+        - 优先使用 config_manager（若启用）
+        - 否则写入 _resolve_config_path() 定位的文件
+        """
+        try:
+            data = config.model_dump()
+            if getattr(self, 'config_manager', None) and self.config_manager.is_enabled():
+                self.config_manager.save_config(data)
+                return True
+            config_file = self._resolve_config_path()
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_file, 'w', encoding='utf-8') as f:
+                yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+            return True
+        except Exception as e:
+            self.logger.error(f"_save_current_config 失败: {e}")
+            return False
+    
+    # 新增：服务初始化，确保属性存在且初始化失败不会中断
+    def _init_services(self):
+        """初始化核心服务，容错处理，避免实例化崩溃"""
+        try:
+            if self.data_manager is None:
+                try:
+                    self.data_manager = DataManager(config)
+                except Exception as e:
+                    self.logger.warning(f"初始化 DataManager 失败: {e}")
+                    self.data_manager = None
+
+            if self.notification_manager is None:
+                try:
+                    self.notification_manager = NotificationManager()
+                except Exception as e:
+                    self.logger.warning(f"初始化 NotificationManager 失败: {e}")
+                    self.notification_manager = None
+
+            if self.stock_monitor is None and self.data_manager and self.notification_manager:
+                try:
+                    self.stock_monitor = StockMonitorService(self.data_manager, self.notification_manager)
+                except Exception as e:
+                    self.logger.warning(f"初始化 StockMonitorService 失败: {e}")
+                    self.stock_monitor = None
+        except Exception as e:
+            self.logger.warning(f"_init_services 执行中发生异常: {e}")
+
+    # 新增：路由预留钩子（当前路由在 __init__ 中定义）
+    def _setup_routes(self):
+        """路由定义钩子（当前不使用，预留扩展点）"""
+        return
+    
     def start(self):
         """启动服务器（独立线程）"""
         if self.server_thread and self.server_thread.is_alive():
             return True
-        
-        # 测试场景/动态端口时无需真正启动开发服务器
         if self.port == 0:
             return True
-        
         def run_server():
             self.app.run(host=self.host, port=self.port)
-        
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
         return True
@@ -587,3 +540,19 @@ class ConfigServer(LoggerMixin):
     def get_url(self) -> str:
         """获取服务器URL"""
         return f"http://{self.host}:{self.port}"
+
+    def _resolve_config_path(self) -> Path:
+        """解析配置文件路径：优先使用 ConfigManager 指定的路径；否则回退到模块常量 CONFIG_FILE
+        - 若 CONFIG_FILE 为绝对路径，直接使用
+        - 否则拼接到项目根目录
+        """
+        try:
+            if getattr(self, 'config_manager', None) and getattr(self.config_manager, 'config_file', None):
+                return Path(self.config_manager.config_file)
+        except Exception:
+            pass
+        cfg = Path(CONFIG_FILE)
+        if cfg.is_absolute():
+            return cfg
+        project_root = Path(__file__).parent.parent.parent
+        return project_root / cfg

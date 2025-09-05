@@ -29,30 +29,26 @@ class _TimeUnit:
         return self
 
 class _Every:
-    def __init__(self, job_list: List[_Job]):
+    def __init__(self, job_list: List[_Job], interval: int = 1):
         self._jobs = job_list
+        self._interval = interval
 
+    @property
     def day(self):
-        return _TimeUnit(self._jobs, 1)
+        return _TimeUnit(self._jobs, self._interval)
 
     @property
     def hour(self):
-        return _TimeUnit(self._jobs, 1)
+        return _TimeUnit(self._jobs, self._interval)
 
+    @property
     def minutes(self):
-        return _TimeUnit(self._jobs, 1)
+        return _TimeUnit(self._jobs, self._interval)
 
 _jobs: List[_Job] = []
 
-
 def every(interval: int = 1) -> _Every:
-    # interval is ignored in stub
-    return _Every(_jobs)
-
+    return _Every(_jobs, interval)
 
 def run_pending():
-    # In stub, we don't schedule by time. We simply do nothing to avoid side-effects during tests.
-    # Alternatively, could run all jobs once:
-    # for job in list(_jobs):
-    #     job.run()
     pass

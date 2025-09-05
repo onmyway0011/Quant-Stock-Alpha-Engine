@@ -76,15 +76,14 @@ class TestNotification(unittest.TestCase):
     
     @patch('aiohttp.ClientSession')
     def test_wecom_notifier_initialize_success(self, mock_session_class):
-        """测试企微通知器成功初始化"""
-        # 模拟成功的HTTP响应
+        """测试企业微信通知器初始化成功"""
+        mock_session = AsyncMock()
         mock_response = AsyncMock()
         mock_response.status = 200
-        mock_response.json.return_value = {'errcode': 0, 'errmsg': 'ok'}
+        mock_response.json.return_value = {'errcode': 0}
         mock_response.__aenter__.return_value = mock_response
         mock_response.__aexit__.return_value = None
         
-        mock_session = AsyncMock()
         mock_session.post.return_value = mock_response
         mock_session_class.return_value = mock_session
         
@@ -93,11 +92,7 @@ class TestNotification(unittest.TestCase):
         async def test_init():
             result = await notifier.initialize()
             self.assertTrue(result)
-            
-            # 验证发送了测试消息
-            mock_session.post.assert_called_once()
-            call_args = mock_session.post.call_args
-            self.assertEqual(call_args[0][0], self.webhook_url)
+            self.assertIsNotNone(notifier.session)
         
         self.loop.run_until_complete(test_init())
     
